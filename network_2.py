@@ -64,7 +64,7 @@ class NetworkPacket:
         if(self.flag != 0):
             # fill with zeroes before the flag value
             byte_S += str(self.flag).zfill(self.flag_S_length)
-            byte_S += str.self.offset).zfull(self.offset_S_length)
+            byte_S += str(self.offset).zfill(self.offset_S_length)
         byte_S += self.data_S
         return byte_S
 
@@ -72,7 +72,7 @@ class NetworkPacket:
     # @param byte_S: byte string representation of the packet
     @classmethod
 
-    def from_byte_S(self, byte_S, mtu):
+    def from_byte_S(self, mtu, byte_S):
         dst_addr = int(byte_S[0 : NetworkPacket.dst_addr_S_length])
         data_S = byte_S[NetworkPacket.dst_addr_S_length : ]
 
@@ -83,21 +83,27 @@ class NetworkPacket:
         fragmented_pkt = []
 
         # if the packet has flag and offset and is greater than mtu
-        if(NetworkPacket.flag_S_length + NetworkPacket.offset_S_length + len(data_S[off_set:] > mtu):
+        if(NetworkPacket.flag_S_length + NetworkPacket.offset_S_length + len(data_S[off_set:]) > mtu):
             # set as fragmented
             frag = 1
             # while there is data past the offset keep fragmenting otherwise set the next offset
-            '''
-            '''
-            '''
-            '''
-            '''
-            '''
-            '''
-            '''
-        return self(dst_addr, data_S)
+            while(len(data_S[off_set:]) != 0):
+                # test var
+                total_len = len(data_S[off_set:]) + NetworkPacket.flag_S_length + NetworkPacket.offset_S_length
 
-# ------------------------------------------------------------------------------------------------ #
+                if(len(data_S[off_set:]) + NetworkPacket.flag_S_length + NetworkPacket.offset_S_length < mtu or len(data_S[off_set:]) + NetworkPacket.flag_S_length + NetworkPacket.offset_S_length == mtu):
+                    frag = 0
+                # set next offset and remove frag flag and previous offset
+                next_offset = off_set + mtu - self.flag_S_length - self.offset_S_length
+                fragmented_pkt.append(self(dst_addr, data_S[off_set:next_offset], frag, off_set))
+                off_set = next_offset
+            return fragmented_pkt
+        
+        # else return normally using new flags
+        else:
+            return self(dst_addr, data_S, frag, off_set)
+
+    # ------------------------------------------------------------------------------------------------ #
 
 
 ## Implements a network host for receiving and transmitting data
@@ -145,10 +151,22 @@ class Host:
 
     # --------------------------------------------------------------------------------------------------------- #
 
+
+    # now need to recieve the fragmented packets
+    fragmented_pkt = []
     ## receive packet from the network layer
     def udt_receive(self):
         pkt_S = self.in_intf_L[0].get()
         if pkt_S is not None:
+            # if its just one packet, not fragmented
+            if(pkt_S[NetworkPacket.dst_addr_S_length] == '1'):
+                self.fragmented_pkt.append(pkt_S[NetworkPacket.dst_addr_S_length + NetworkPacket.flag_S_length + NetworkPacket.offset_S_length:])
+            # else join the incoming packets
+            else:
+                self.fragmented_pkt.append(pkt_S[NetworkPacket.dst_addr_S_length:])
+                print('%s: --recieved-- packet "%s"' % (self, ''.join(self.fragmented_pkt)))
+                self.fragmented_pkt.clear()
+
             print('%s: --recieved-- packet "%s"' % (self, pkt_S))
 
     ## thread target for the host to keep receiving data
@@ -184,6 +202,14 @@ class Router:
     ## look through the content of incoming interfaces and forward to
     # appropriate outgoing interfaces
     def forward(self):
+
+        '''
+        '''
+
+        # set mtu to 30
+        self.out_intf_L[0].mtu = 30
+
+
         for i in range(len(self.in_intf_L)):
             pkt_S = None
             try:
@@ -191,13 +217,19 @@ class Router:
                 pkt_S = self.in_intf_L[i].get()
                 #if packet exists make a forwarding decision
                 if pkt_S is not None:
-                    p = NetworkPacket.from_byte_S(pkt_S) #parse a packet out
+
+                    # add new vars
+
+                    p = NetworkPacket.from_byte_S(self.out_intf_L[0].mtu, pkt_S) #parse a packet out
                     # HERE you will need to implement a lookup into the
                     # forwarding table to find the appropriate outgoing interface
                     # for now we assume the outgoing interface is also i
-                    self.out_intf_L[i].put(p.to_byte_S(), True)
-                    print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
-                        % (self, p, i, i, self.out_intf_L[i].mtu))
+                    
+                    for x in p:
+                        self.out_intf_L[i].put(x.to_byte_S(), True)
+                        print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
+                        % (self, x.to_byte_S(), i, i, self.out_intf_L[i].mtu))
+
             except queue.Full:
                 print('%s: packet "%s" lost on interface %d' % (self, p, i))
                 pass

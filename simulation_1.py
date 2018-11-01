@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     #create some send events    
     for i in range(1):
-        client.udt_send(2, '80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char%d' % i)
+        client.udt_send(2, '80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char 80 char test test etst tstt dasd %d' % i)
     
     # --------------------------------------------------------------------------- #
     
